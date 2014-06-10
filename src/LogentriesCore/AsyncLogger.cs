@@ -48,7 +48,7 @@ namespace LogentriesCore.Net
         // Error message displayed when invalid account_key or location parameters are detected. 
         protected const String InvalidHttpPutCredentialsMessage = "\n\nIt appears your LOGENTRIES_ACCOUNT_KEY or LOGENTRIES_LOCATION values are invalid or missing.\n\n";
 
-        // Error message deisplayed when queue overflow occurs. 
+        // Error message displayed when queue overflow occurs. 
         protected const String QueueOverflowMessage = "\n\nLogentries buffer queue overflow. Message dropped.\n\n";
 
         // Newline char to trim from message for formatting. 
@@ -108,7 +108,7 @@ namespace LogentriesCore.Net
             _allQueues.Add(Queue);
 
             WorkerThread = new Thread(new ThreadStart(Run));
-            WorkerThread.Name = "Logentries Log4net Appender";
+            WorkerThread.Name = "Logentries Appender";
             WorkerThread.IsBackground = true;
         }
 
@@ -200,7 +200,14 @@ namespace LogentriesCore.Net
 
         private LeClient LeClient = null;
         protected bool IsRunning = false;
+        private CancellationTokenSource _cancel = new CancellationTokenSource();
 
+        protected enum InternalLogLevel { Debug, Info, Warn, Error };
+        public Action<string> LogInternalDebug;
+        public Action<string> LogInternalInfo;
+        public Action<string> LogInternalWarn;
+        public Action<string> LogInternalError;
+        
         #region Protected methods
 
         protected virtual void Run()
@@ -211,10 +218,11 @@ namespace LogentriesCore.Net
                 ReopenConnection();
 
                 // Send data in queue.
-                while (true)
+                while (!_cancel.IsCancellationRequested)
                 {
                     // Take data from queue.
-                    var line = Queue.Take();
+                    var line = Queue.Take(_cancel.Token);
+                    LogInternal(InternalLogLevel.Debug, "Sending line: " + line);
 
                     // Replace newline chars with line separator to format multi-line events nicely.
                     foreach (String newline in posix_newline)
@@ -227,7 +235,7 @@ namespace LogentriesCore.Net
                     byte[] data = UTF8.GetBytes(finalLine);
 
                     // Send data, reconnect if needed.
-                    while (true)
+                    while (!_cancel.IsCancellationRequested)
                     {
                         try
                         {
@@ -235,31 +243,42 @@ namespace LogentriesCore.Net
 
                             if (m_ImmediateFlush)
                                 this.LeClient.Flush();
+
+                            LogInternal(InternalLogLevel.Debug, "Line sent");
+                            break;
                         }
-                        catch (IOException)
+                        catch (Exception ex)
                         {
-                            // Reopen the lost connection.
+                            if (ex.IsFatal()) throw;
+                            LogInternal(InternalLogLevel.Error, "Sending failed", ex);
                             ReopenConnection();
                             continue;
                         }
-
-                        break;
                     }
                 }
+
+                LogInternal(InternalLogLevel.Info, "Asynchronous socket client stopped");
             }
-            catch (ThreadInterruptedException ex)
+            catch (OperationCanceledException)  // thrown on cancel token by Queue.Take
             {
-                WriteDebugMessages("Logentries asynchronous socket client was interrupted.", ex);
+                LogInternal(InternalLogLevel.Info, "Asynchronous socket client canceled");
             }
+            catch (Exception ex)
+            {
+                LogInternal(InternalLogLevel.Error, "Asynchronous socket client failed", ex);
+            }
+
+            CloseConnection();
         }
 
-        protected virtual void OpenConnection()
+        protected virtual bool OpenConnection()
         {
             try
             {
                 if (LeClient == null)
                     LeClient = new LeClient(m_UseHttpPut, m_UseSsl);
 
+                LogInternal(InternalLogLevel.Info, "Connect client");
                 LeClient.Connect();
 
                 if (m_UseHttpPut)
@@ -267,10 +286,14 @@ namespace LogentriesCore.Net
                     var header = String.Format("PUT /{0}/hosts/{1}/?realtime=1 HTTP/1.1\r\n\r\n", m_AccountKey, m_Location);
                     LeClient.Write(ASCII.GetBytes(header), 0, header.Length);
                 }
+
+                return true;
             }
             catch (Exception ex)
             {
-                throw new IOException("An error occurred while opening the connection.", ex);
+                if (ex.IsFatal()) throw;
+                LogInternal(InternalLogLevel.Warn, "Unable to connect to Logentries API.", ex);
+                return false;
             }
         }
 
@@ -279,43 +302,33 @@ namespace LogentriesCore.Net
             CloseConnection();
 
             var rootDelay = MinDelay;
-            while (true)
+            while (!OpenConnection())
             {
-                try
-                {
-                    OpenConnection();
-
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    if (m_Debug)
-                    {
-                        WriteDebugMessages("Unable to connect to Logentries API.", ex);
-                    }
-                }
-
                 rootDelay *= 2;
                 if (rootDelay > MaxDelay)
                     rootDelay = MaxDelay;
 
-                var waitFor = rootDelay + Random.Next(rootDelay);
-
-                try
-                {
-                    Thread.Sleep(waitFor);
-                }
-                catch
-                {
-                    throw new ThreadInterruptedException();
-                }
+                var delayMs = rootDelay + Random.Next(rootDelay);
+                LogInternal(InternalLogLevel.Debug, "Sleep " + delayMs + "ms");
+                Thread.Sleep(delayMs);
             }
         }
 
         protected virtual void CloseConnection()
         {
-            if (LeClient != null)
-                LeClient.Close();
+            try
+            {
+                if (LeClient != null)
+                {
+                    LogInternal(InternalLogLevel.Info, "Close client");
+                    LeClient.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                if (ex.IsFatal()) throw;
+                LogInternal(InternalLogLevel.Error, "Close client failed: " + ex.Message);
+            }
         }
 
         private string retrieveSetting(String name)
@@ -356,7 +369,7 @@ namespace LogentriesCore.Net
                     return true;
                 }
 
-                WriteDebugMessages(InvalidTokenMessage);
+                LogInternal(InternalLogLevel.Error, InvalidTokenMessage);
                 return false;
             }
 
@@ -382,7 +395,7 @@ namespace LogentriesCore.Net
                 }
             }
 
-            WriteDebugMessages(InvalidHttpPutCredentialsMessage);
+            LogInternal(InternalLogLevel.Error, InvalidHttpPutCredentialsMessage);
             return false;
         }
 
@@ -414,36 +427,25 @@ namespace LogentriesCore.Net
 #endif
         }
 
-        protected virtual void WriteDebugMessages(string message, Exception ex)
+        protected virtual void LogInternal(InternalLogLevel level, string message, Exception ex)
         {
-            if (!m_Debug)
-                return;
-
-            message = LeSignature + message;
-            string[] messages = { message, ex.ToString() };
-            foreach (var msg in messages)
-            {
-                // Use below line instead when compiling with log4net1.2.10.
-                //LogLog.Debug(msg);
-
-                //LogLog.Debug(typeof(LogentriesAppender), msg);
-
-                Debug.WriteLine(message);
-            }
+            LogInternal(level, message);
+            LogInternal(level, ex.ToString());
         }
 
-        protected virtual void WriteDebugMessages(string message)
+        protected virtual void LogInternal(InternalLogLevel level, string message)
         {
-            if (!m_Debug)
-                return;
-
             message = LeSignature + message;
+            switch (level)
+            {
+                case InternalLogLevel.Debug: if (LogInternalDebug != null) LogInternalDebug(message); break;
+                case InternalLogLevel.Info:  if (LogInternalInfo != null)  LogInternalInfo(message);  break;
+                case InternalLogLevel.Warn:  if (LogInternalWarn != null)  LogInternalWarn(message);  break;
+                case InternalLogLevel.Error: if (LogInternalError != null) LogInternalError(message); break;
+            }
 
-            // Use below line instead when compiling with log4net1.2.10.
-            //LogLog.Debug(message);
-
-            //LogLog.Debug(typeof(LogentriesAppender), message);
-            Debug.WriteLine(message);
+            if (m_Debug)
+                Debug.WriteLine(message);
         }
 
         #endregion
@@ -452,18 +454,17 @@ namespace LogentriesCore.Net
 
         public virtual void AddLine(string line)
         {
-            Debug.Write("LE - Adding Line: line");
             if (!IsRunning)
             {
                 if (LoadCredentials())
                 {
-                    WriteDebugMessages("Starting Logentries asynchronous socket client.");
+                    LogInternal(InternalLogLevel.Info, "Starting Logentries asynchronous socket client.");
                     WorkerThread.Start();
                     IsRunning = true;
                 }
             }
 
-            WriteDebugMessages("Queueing: " + line);
+            LogInternal(InternalLogLevel.Debug, "Queuing: " + line);
 
             String trimmedEvent = line.TrimEnd(TrimChars);
 
@@ -472,13 +473,14 @@ namespace LogentriesCore.Net
             {
                 Queue.Take();
                 if (!Queue.TryAdd(trimmedEvent))
-                    WriteDebugMessages(QueueOverflowMessage);
+                    LogInternal(InternalLogLevel.Warn, QueueOverflowMessage);
             }
         }
 
-        public void interruptWorker()
+        public void Stop()
         {
-            WorkerThread.Interrupt();
+            LogInternal(InternalLogLevel.Info, "Stop requested");
+            _cancel.Cancel();
         }
 
         #endregion

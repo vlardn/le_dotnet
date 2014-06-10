@@ -19,7 +19,13 @@ namespace NLog.Targets
 
         public LogentriesTarget()
         {
-            logentriesAsync = new AsyncLogger();
+            logentriesAsync = new AsyncLogger()
+            { 
+                LogInternalDebug = InternalLogger.Debug,
+                LogInternalInfo = InternalLogger.Info,
+                LogInternalWarn = InternalLogger.Warn,
+                LogInternalError = InternalLogger.Error 
+            };
         }
 
         /** Debug flag. */
@@ -64,27 +70,18 @@ namespace NLog.Targets
             set { logentriesAsync.setLocation(value); }
         }
 
+        public bool AppendExceptionString { get; set; }
+
         public bool KeepConnection { get; set; }
 
         protected override void Write(LogEventInfo logEvent)
         {
-            //Render message content
-            String renderedEvent = this.Layout.Render(logEvent);
+            string renderedEvent = this.Layout.Render(logEvent);
 
-            try
+            if (AppendExceptionString && logEvent.Exception != null)
             {
-                //NLog can pass null references of Exception
-                if (logEvent.Exception != null)
-                {
-                    String excep = logEvent.Exception.ToString();
-                    if (excep.Length > 0)
-                    {
-                        renderedEvent += ", ";
-                        renderedEvent += excep;
-                    }
-                }
+                renderedEvent += String.Format(", {0}", logEvent.Exception);
             }
-            catch { }
 
             logentriesAsync.AddLine(renderedEvent);
         }
@@ -93,7 +90,7 @@ namespace NLog.Targets
         {
             base.CloseTarget();
 
-            logentriesAsync.interruptWorker();
+            logentriesAsync.Stop();
         }
     }
 }

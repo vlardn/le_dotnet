@@ -87,6 +87,7 @@ S5ol3bQmY1mv78XKkOk=
         {
             m_Client = new TcpClient(LeApiUrl, m_TcpPort);
             m_Client.NoDelay = true;
+            m_Client.Client.LingerState = new LingerOption(true, 10);
 
             m_Stream = m_Client.GetStream();
 
@@ -111,13 +112,13 @@ S5ol3bQmY1mv78XKkOk=
         {
             if (m_Client != null)
             {
-                try
-                {
-                    m_Client.Close();
-                }
-                catch
-                {
-                }
+                if (m_SslStream != null)
+                    m_SslStream.Close();
+
+                if (m_Stream != null)
+                    m_Stream.Close();
+
+                m_Client.Close();
             }
         }
     }

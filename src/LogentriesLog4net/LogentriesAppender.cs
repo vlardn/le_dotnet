@@ -167,7 +167,7 @@ namespace log4net.Appender
 
         protected override void OnClose()
         {
-            logentriesAsync.interruptWorker();
+            logentriesAsync.Stop();
         }
     }
 }
