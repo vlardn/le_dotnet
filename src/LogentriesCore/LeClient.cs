@@ -88,6 +88,7 @@ S5ol3bQmY1mv78XKkOk=
             m_Client = new TcpClient(LeApiUrl, m_TcpPort);
             m_Client.NoDelay = true;
             m_Client.Client.LingerState = new LingerOption(true, 10);
+            m_Client.Client.SetKeepAlive(3 * 60 * 1000, 5 * 1000);
 
             m_Stream = m_Client.GetStream();
 

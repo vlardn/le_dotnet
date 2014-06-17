@@ -5,6 +5,7 @@ using System.Text;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Net.Sockets;
 
 namespace LogentriesCore
 {
@@ -41,6 +42,17 @@ namespace LogentriesCore
             }
 
             return false;
+        }
+
+        public static void SetKeepAlive(this Socket socket, ulong keepAliveIntervalMs, ulong retryIntervalMs)
+        {
+            int size = sizeof(UInt32);
+            byte[] inArray = new byte[size * 3];
+            UInt32 on = 1;
+            Array.Copy(BitConverter.GetBytes(on), 0, inArray, 0, size);
+            Array.Copy(BitConverter.GetBytes(keepAliveIntervalMs), 0, inArray, size, size);
+            Array.Copy(BitConverter.GetBytes(retryIntervalMs), 0, inArray, size * 2, size);
+            socket.IOControl(IOControlCode.KeepAliveValues, inArray, null); 
         }
     }
 }
