@@ -5,11 +5,11 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{077DA00E-D163-4F6C-82A3-7CD512DFFDED}</ProjectGuid>
+    <ProjectGuid>{9C28549C-30DC-4844-BDFE-A60355ADDED2}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>LogentriesNLog</RootNamespace>
-    <AssemblyName>LogentriesNLog</AssemblyName>
+    <RootNamespace>LogentriesLog4net35</RootNamespace>
+    <AssemblyName>LogentriesLog4net35</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
@@ -32,8 +32,8 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="NLog">
-      <HintPath>..\packages\NLog.2.0.1.2\lib\net35\NLog.dll</HintPath>
+    <Reference Include="log4net">
+      <HintPath>..\packages\log4net.2.0.0\lib\net35-full\log4net.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -44,13 +44,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\LogentriesNLog\LogentriesTarget.cs">
-      <Link>LogentriesTarget.cs</Link>
+    <Compile Include="..\LogentriesLog4net\LogentriesAppender.cs">
+      <Link>LogentriesAppender.cs</Link>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\LogentriesCore35\LogentriesCore35.csproj">
@@ -61,8 +58,8 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>if $(ConfigurationName) == Release (
-COPY "$(TargetPath)" "%25NUGET_PROJECTS%25LogentriesNLog\2.3.0\lib\net35\" /Y
-nuget pack %25NUGET_PROJECTS%25LogentriesNLog\2.3.0\logentries.nlog.nuspec /o %25NUGET_PROJECTS%25LogentriesNLog\2.3.0\
+COPY "$(TargetPath)" "%25NUGET_PROJECTS%25$(ProjectName)\2.5.0\lib\net40\" /Y
+nuget pack %25NUGET_PROJECTS%25$(ProjectName)\2.5.0\logentries.log4net.nuspec /o %25NUGET_PROJECTS%25$(ProjectName)\2.5.0\
 )</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

@@ -28,11 +28,33 @@ namespace NLog.Targets
             };
         }
 
+        
         /** Debug flag. */
         public bool Debug 
         {
             get { return logentriesAsync.getDebug(); }
             set { logentriesAsync.setDebug(value); } 
+        }
+
+        /** Is using DataHub parameter flag. - ste to true if it is needed to send messages to DataHub instance. */
+        public bool IsUsingDataHub
+        {
+            get { return logentriesAsync.getIsUsingDataHab(); }
+            set { logentriesAsync.setIsUsingDataHub(value); }
+        }
+
+        /** DataHub server address */
+        public String DataHubAddr
+        {
+            get { return logentriesAsync.getDataHubAddr(); }
+            set { logentriesAsync.setDataHubAddr(value); }
+        }
+
+        /** DataHub server port */
+        public int DataHubPort
+        {
+            get { return logentriesAsync.getDataHubPort(); }
+            set { logentriesAsync.setDataHubPort(value); }
         }
 
         /** Option to set Token programmatically or in Appender Definition */
@@ -70,7 +92,28 @@ namespace NLog.Targets
             set { logentriesAsync.setLocation(value); }
         }
 
-        public bool AppendExceptionString { get; set; }
+		public bool AppendExceptionString { get; set; }
+
+        /* LogHostname - switch that defines whether add host name to the log message */
+        public bool LogHostname
+        {
+            get { return logentriesAsync.getUseHostName(); }
+            set { logentriesAsync.setUseHostName(value); }
+        }
+
+        /* HostName - user-defined host name. If empty the library will try to obtain it automatically */
+        public String HostName
+        {
+            get { return logentriesAsync.getHostName(); }
+            set { logentriesAsync.setHostName(value); }
+        }
+
+        /* User-defined log message ID */
+        public String LogID
+        {
+            get { return logentriesAsync.getLogID(); }
+            set { logentriesAsync.setLogID(value); }
+        }
 
         public bool KeepConnection { get; set; }
 
